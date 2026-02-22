@@ -1,1 +1,2 @@
-# No external dependencies - uses Python stdlib only
+fastapi==0.104.1
+uvicorn==0.24.0

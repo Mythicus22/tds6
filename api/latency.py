@@ -4,11 +4,29 @@ POST /api/latency with {"regions": [...], "threshold_ms": 180}
 """
 import json
 import math
-from http.server import BaseHTTPRequestHandler
-from os.path import dirname, join
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-# Path to telemetry data (relative to project root)
-TELEMETRY_PATH = join(dirname(dirname(__file__)), "q-vercel-latency.json")
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+# Path to telemetry data
+TELEMETRY_PATH = Path(__file__).parent.parent / "q-vercel-latency.json"
+
+
+class LatencyRequest(BaseModel):
+    regions: list
+    threshold_ms: float
 
 
 def load_telemetry():
@@ -55,58 +73,18 @@ def process_request(regions, threshold_ms):
     return result
 
 
-def cors_headers():
-    """CORS headers for POST from any origin."""
-    return {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Max-Age": "86400",
-    }
+@app.post("/api/latency")
+async def latency_check(request: LatencyRequest):
+    """Handle POST with regions and threshold_ms."""
+    if not isinstance(request.regions, list):
+        raise HTTPException(status_code=400, detail="regions must be an array")
+    if request.threshold_ms is None:
+        raise HTTPException(status_code=400, detail="threshold_ms is required and must be a number")
 
-
-class handler(BaseHTTPRequestHandler):
-    def _send_cors(self):
-        for k, v in cors_headers().items():
-            self.send_header(k, v)
-
-    def _send_json(self, status, body):
-        self.send_response(status)
-        self.send_header("Content-type", "application/json")
-        self._send_cors()
-        self.end_headers()
-        self.wfile.write(json.dumps(body).encode("utf-8"))
-
-    def do_OPTIONS(self):
-        """Handle CORS preflight."""
-        self.send_response(204)
-        self._send_cors()
-        self.end_headers()
-
-    def do_POST(self):
-        """Handle POST with regions and threshold_ms."""
-        try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length).decode("utf-8") if content_length else "{}"
-            payload = json.loads(body or "{}")
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "Invalid JSON"})
-            return
-
-        regions = payload.get("regions", [])
-        threshold_ms = payload.get("threshold_ms")
-
-        if not isinstance(regions, list):
-            self._send_json(400, {"error": "regions must be an array"})
-            return
-        if threshold_ms is None or not isinstance(threshold_ms, (int, float)):
-            self._send_json(400, {"error": "threshold_ms is required and must be a number"})
-            return
-
-        try:
-            result = process_request(regions, float(threshold_ms))
-            self._send_json(200, result)
-        except FileNotFoundError:
-            self._send_json(500, {"error": "Telemetry data not found"})
-        except Exception as e:
-            self._send_json(500, {"error": str(e)})
+    try:
+        result = process_request(request.regions, float(request.threshold_ms))
+        return result
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Telemetry data not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

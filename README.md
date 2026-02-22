@@ -115,10 +115,16 @@ CORS is enabled for POST requests from any origin.
 
 ### Test the endpoint
 
+**Bash / Git Bash / WSL:**
 ```bash
 curl -X POST https://<your-project>.vercel.app/api/latency \
   -H "Content-Type: application/json" \
   -d '{"regions":["amer","apac"],"threshold_ms":160}'
+```
+
+**PowerShell (Windows):**
+```powershell
+Invoke-RestMethod -Uri "https://<your-project>.vercel.app/api/latency" -Method POST -ContentType "application/json" -Body '{"regions":["amer","apac"],"threshold_ms":160}'
 ```
 
 ---

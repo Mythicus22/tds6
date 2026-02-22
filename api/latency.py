@@ -73,7 +73,7 @@ def process_request(regions, threshold_ms):
     return result
 
 
-@app.post("/api/latency")
+@app.post("/")
 async def latency_check(request: LatencyRequest):
     """Handle POST with regions and threshold_ms."""
     if not isinstance(request.regions, list):
